@@ -1,0 +1,59 @@
+{
+  "name": "arkpm",
+  "version": "1.0.0",
+  "description": "Administra apps PM2 de servidores Ubuntu por SSH (Angular + Electron + Capacitor)",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "ng serve",
+    "build": "ng build --base-href ./",
+    "electron": "npm run build && electron .",
+    "electron:dev": "electron .",
+    "test:ssh": "node scripts/test-ssh-layer.js",
+    "test:monitor": "node scripts/test-monitor.js",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "node scripts/version.js android && npm run build && npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "dist": "node scripts/version.js electron && npm run build && electron-builder",
+    "postinstall": "electron-builder install-app-deps || echo (aviso) no se pudo recompilar better-sqlite3 para Electron",
+    "apk": "node scripts/build-apk.js",
+    "apk:release": "node scripts/build-apk.js --release",
+    "release:all": "npm run dist && npm run apk"
+  },
+  "build": {
+    "appId": "com.ark.arkpm",
+    "productName": "Arkpm",
+    "files": ["electron/**/*", "versions.json", "dist/app/browser/**/*", "package.json"],
+    "directories": { "output": "release/electron" },
+    "extraResources": [{ "from": "resources/icon.png", "to": "icon.png" }],
+    "win": { "target": ["portable", "dir"], "icon": "resources/icon.png" },
+    "portable": { "artifactName": "Arkpm-${version}.exe" }
+  },
+  "dependencies": {
+    "@angular/animations": "^18.2.0",
+    "@angular/common": "^18.2.0",
+    "@angular/compiler": "^18.2.0",
+    "@angular/core": "^18.2.0",
+    "@angular/forms": "^18.2.0",
+    "@angular/platform-browser": "^18.2.0",
+    "@capacitor-community/sqlite": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "better-sqlite3": "^11.10.0",
+    "rxjs": "~7.8.0",
+    "ssh2": "^1.16.0",
+    "tslib": "^2.6.0",
+    "zone.js": "~0.14.10"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^18.2.0",
+    "@angular/cli": "^18.2.0",
+    "@angular/compiler-cli": "^18.2.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0",
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "~5.5.4"
+  },
+  "engines": { "node": ">=20.11" }
+}
