@@ -1,8 +1,9 @@
-import { Component, OnDestroy, OnInit, inject, output } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ToastService } from './dialog.service';
 import { IconComponent } from './icon.component';
 import { LayoutService } from './layout.service';
+import { DesktopOptions, TRANSPORT } from './transport';
 import { NotifyService } from './notify.service';
 import { StoreService } from './store.service';
 
@@ -32,6 +33,26 @@ import { StoreService } from './store.service';
             </div>
           }
         </section>
+
+        @if (desktop(); as d) {
+          <section class="card">
+            <h3>Inicio y ventana (escritorio)</h3>
+            <label class="chk big"><input type="checkbox" [checked]="d.autoStart" [disabled]="!d.supported" (change)="setDesktop($event, 'autoStart')" /><span><b>{{ d.platform === 'darwin' ? 'Iniciar con macOS' : 'Iniciar con Windows' }}</b><br>
+              <span class="mut small">{{ d.supported ? 'Arkpm se abre solo al iniciar sesión en el equipo.' : 'Disponible solo en la versión instalada o portable (no en modo desarrollo) de Windows o macOS.' }}</span></span></label>
+            <label class="chk big"><input type="checkbox" [checked]="d.startHidden" (change)="setDesktop($event, 'startHidden')" /><span><b>Iniciar en segundo plano</b><br>
+              <span class="mut small">Al abrir Arkpm no se muestra la ventana: queda en la bandeja del sistema y una notificación lo avisa. Se abre con un clic en el icono de la bandeja.</span></span></label>
+            <label class="chk big"><input type="checkbox" [checked]="d.minimizeToBackground" (change)="setDesktop($event, 'minimizeToBackground')" /><span><b>Al minimizar, pasar a segundo plano</b><br>
+              <span class="mut small">Minimizar oculta la ventana (queda el icono de la bandeja) y una notificación te avisa de que pasó a segundo plano.</span></span></label>
+            <label class="chk big"><input type="checkbox" [checked]="d.confirmClose" (change)="setDesktop($event, 'confirmClose')" /><span><b>Pedir confirmación al cerrar</b><br>
+              <span class="mut small">Al cerrar la ventana pregunta si quieres cerrar Arkpm{{ s().background ? ', pasarlo a segundo plano' : '' }} o cancelar.</span></span></label>
+          </section>
+        } @else if (layout.platform === 'android') {
+          <section class="card">
+            <h3>Al salir</h3>
+            <label class="chk big"><input type="checkbox" [checked]="confirmExit()" (change)="setConfirmExit($event)" /><span><b>Pedir confirmación al salir</b><br>
+              <span class="mut small">Al pulsar Atrás en la pantalla principal pregunta antes de cerrar Arkpm.</span></span></label>
+          </section>
+        }
 
         <section class="card" [class.off]="!s().enabled">
           <label class="chk big"><input type="checkbox" [checked]="s().background" [disabled]="!s().enabled" (change)="toggle($event, 'background')" /><span><b>Seguir vigilando en segundo plano</b><br>
@@ -66,11 +87,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
   readonly store = inject(StoreService);
   readonly layout = inject(LayoutService);
   private readonly toast = inject(ToastService);
+  private readonly t = inject(TRANSPORT);
+  readonly desktop = signal<DesktopOptions | null>(null);
+  readonly confirmExit = signal(this.store.getSetting<boolean>('confirmExit', true));
   readonly closed = output<void>();
   readonly s = this.n.settings;
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  ngOnInit() { this.n.refreshStatus(); this.timer = setInterval(() => this.n.refreshStatus(), 3000); }
+  ngOnInit() { this.t.desktopGet().then((d) => this.desktop.set(d)).catch(() => { /* sin opciones de escritorio */ }); this.n.refreshStatus(); this.timer = setInterval(() => this.n.refreshStatus(), 3000); }
   ngOnDestroy() { if (this.timer) clearInterval(this.timer); }
 
   private st(id: string) { return this.n.status().find((x) => x.id === id); }
@@ -82,6 +106,20 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const el = ev.target as HTMLInputElement;
     await this.n.update({ [key]: el.checked });
     el.checked = this.n.settings()[key];
+  }
+
+  /** Guarda una opción de escritorio y deja la casilla como quedó de verdad. */
+  async setDesktop(ev: Event, key: 'autoStart' | 'startHidden' | 'minimizeToBackground' | 'confirmClose') {
+    const el = ev.target as HTMLInputElement;
+    try { this.desktop.set(await this.t.desktopSet({ [key]: el.checked })); }
+    catch (e) { this.toast.err(e); }
+    el.checked = !!this.desktop()?.[key];
+  }
+
+  async setConfirmExit(ev: Event) {
+    const on = (ev.target as HTMLInputElement).checked;
+    this.confirmExit.set(on);
+    await this.store.setSetting('confirmExit', on);
   }
 
   async test() { try { await this.n.test(); } catch (e) { this.toast.err(e); } }

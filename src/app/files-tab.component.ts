@@ -37,8 +37,8 @@ type SortKey = 'name' | 'size' | 'mtime';
         <div class="row selbar">
           <button class="btn ghost icon sm" (click)="clearSel()" aria-label="Cancelar selección"><app-icon name="close" /></button>
           <b class="grow">{{ selected().size }} seleccionado(s)</b>
-          <button class="btn sm" (click)="download()"><app-icon name="download" [size]="15" />Descargar</button>
-          <button class="btn sm danger" (click)="remove()"><app-icon name="trash" [size]="15" />Eliminar</button>
+          <button class="btn sm icon" (click)="download()" aria-label="Descargar" title="Descargar"><app-icon name="download" [size]="17" /></button>
+          <button class="btn sm icon danger" (click)="remove()" aria-label="Eliminar" title="Eliminar"><app-icon name="trash" [size]="17" /></button>
           <button class="btn sm ghost icon" (click)="selMenu()" aria-label="Más"><app-icon name="more" /></button>
         </div>
       } @else {
@@ -100,9 +100,9 @@ type SortKey = 'name' | 'size' | 'mtime';
           }
         </div>
         <footer>
-          <button class="btn sec" (click)="download([v.entry.name]); closeViewer()"><app-icon name="download" [size]="16" />Descargar</button>
+          <button class="btn sec icon" (click)="download([v.entry.name]); closeViewer()" aria-label="Descargar" title="Descargar"><app-icon name="download" [size]="18" /></button>
           <button class="btn sec" (click)="rename(v.entry)"><app-icon name="edit" [size]="16" />Renombrar</button>
-          <button class="btn sec" (click)="remove([v.entry.name]); closeViewer()"><app-icon name="trash" [size]="16" />Eliminar</button>
+          <button class="btn sec icon" (click)="remove([v.entry.name]); closeViewer()" aria-label="Eliminar" title="Eliminar"><app-icon name="trash" [size]="18" /></button>
           <span class="grow"></span>
           @if (!v.binary && !v.tooBig && !v.truncated) { <button class="btn" [disabled]="v.text === v.original" (click)="saveViewer()"><app-icon name="save" [size]="16" />Guardar</button> }
         </footer>

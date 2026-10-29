@@ -9,6 +9,8 @@ import { ToastService } from './dialog.service';
 export type Tab = 'estado' | 'logs' | 'archivos' | 'deploy' | 'backup';
 /** Pantalla visible en móvil (en tableta y escritorio se muestran juntas). */
 export type PhoneView = 'servers' | 'apps' | 'detail';
+/** Pestaña de la vista de servidor en móvil (barra inferior). */
+export type ServerTab = 'estado' | 'apps' | 'acciones';
 
 /** Estado de trabajo: servidor y app seleccionados, lista de PM2 en vivo y navegación. */
 @Injectable({ providedIn: 'root' })
@@ -22,6 +24,7 @@ export class WorkspaceService {
   readonly appId = signal<string | null>(null);
   readonly tab = signal<Tab>('estado');
   readonly phoneView = signal<PhoneView>('servers');
+  readonly serverTab = signal<ServerTab>('apps');
   readonly groups = signal<Pm2Group[]>([]);
   readonly loading = signal(false);
   readonly listError = signal('');
@@ -51,12 +54,12 @@ export class WorkspaceService {
   }
 
   // ---------------------------------------------------------------- navegación
-  selectProfile(id: string) { this.profileId.set(id); this.appId.set(null); this.phoneView.set('apps'); }
+  selectProfile(id: string) { this.profileId.set(id); this.appId.set(null); this.serverTab.set('apps'); this.phoneView.set('apps'); }
   selectApp(id: string, tab?: Tab) { this.appId.set(id); if (tab) this.tab.set(tab); this.phoneView.set('detail'); }
   /** Atrás (botón del teléfono / flecha de la cabecera). Devuelve false si ya está en la pantalla inicial. */
   back(): boolean {
     const v = this.phoneView();
-    if (v === 'detail') { this.phoneView.set('apps'); return true; }
+    if (v === 'detail') { this.serverTab.set('apps'); this.phoneView.set('apps'); return true; }
     if (v === 'apps') { this.phoneView.set('servers'); return true; }
     return false;
   }
@@ -133,7 +136,7 @@ export class WorkspaceService {
     const id = this.profileId()!;
     const existing = this.store.apps().find((a) => a.profileId === id && a.pm2Name === g.name);
     if (existing) return existing;
-    const a: TrackedApp = { id: uid(), profileId: id, pm2Name: g.name, label: label?.trim() || g.name, dir: '', config: DEFAULT_CONFIG(), createdAt: Date.now() };
+    const a: TrackedApp = { id: uid(), profileId: id, pm2Name: g.name, label: label?.trim() || g.name, dir: '', config: this.store.sharedConfigFor(id, g.name) ?? DEFAULT_CONFIG(), createdAt: Date.now() };
     await this.store.saveApp(a);
     return a;
   }

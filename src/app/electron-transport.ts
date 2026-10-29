@@ -1,4 +1,4 @@
-import { cleanError, type MonitorConfig, type MonitorStatus, type NotifyPermission, type ConnectOpts, type ConnectResult, type ExecResult, type LocalFile, type ProgressEvent, type SshTransport, type StreamEvent, type UploadItem } from './transport';
+import { cleanError, type DesktopOptions, type MonitorConfig, type MonitorStatus, type NotifyPermission, type ConnectOpts, type ConnectResult, type ExecResult, type LocalFile, type ProgressEvent, type SshTransport, type StreamEvent, type UploadItem } from './transport';
 import type { RemoteEntry } from './models';
 
 /** Escritorio: todo pasa por IPC al proceso principal (electron/main.js → electron/ssh.js). */
@@ -35,6 +35,8 @@ export class ElectronTransport implements SshTransport {
   monitorConfigure(cfg: MonitorConfig) { return this.call<void>(this.api.monitorConfigure(cfg)); }
   monitorStatus() { return this.call<MonitorStatus[]>(this.api.monitorStatus()); }
   monitorMute(serverId: string, name: string) { return this.call<void>(this.api.monitorMute(serverId, name)); }
+  desktopGet() { return this.call<DesktopOptions>(this.api.desktopGet()); }
+  desktopSet(patch: Partial<Pick<DesktopOptions, 'autoStart' | 'startHidden' | 'minimizeToBackground' | 'confirmClose'>>) { return this.call<DesktopOptions>(this.api.desktopSet(patch)); }
   notifyTest() { return this.call<void>(this.api.notifyTest()); }
   notifyPermission() { return this.call<NotifyPermission>(this.api.notifyPermission()); }
   requestNotifyPermission() { return this.notifyPermission(); }

@@ -33,6 +33,16 @@ Ajustes (icono ⚙ de la lista de servidores): activar avisos, elegir qué event
 * Un servicio que se reinicia en bucle avisa como mucho una vez cada 5 minutos.
 * Si no activas el segundo plano, los avisos funcionan solo con la app abierta.
 
+## Configuración que se conserva
+
+La configuración de **Deploy** (modo, archivos que se conservan, comandos posteriores…) y de **Backup** (qué incluir/excluir, carpeta de destino…) se guarda **por servidor (host:puerto) + servicio de PM2**, no por usuario SSH ni por perfil. Se mantiene si cambias el usuario, editas el servidor, quitas la app de la lista y la vuelves a agregar, o creas otro perfil para el mismo servidor (la hereda).
+
+## Inicio y ventana (escritorio)
+
+En ⚙ → *Inicio y ventana*: **Iniciar con Windows** (solo versión instalada/portable), **Iniciar en segundo plano** (al abrir no se muestra la ventana; queda en la bandeja y una notificación lo avisa) **Al minimizar, pasar a segundo plano** (oculta la ventana y avisa con una notificación) y **Pedir confirmación al cerrar**. Las opciones se guardan en `data/desktop.json`.
+
+**Confirmación al cerrar**: al cerrar la ventana pregunta «¿Cerrar Arkpm?» (Cerrar / Cancelar). Con el segundo plano activo ofrece *Pasar a segundo plano / Salir de Arkpm / Cancelar*. Incluye «No volver a preguntar» y se reactiva desde los ajustes. En Android, el botón Atrás en la pantalla principal pregunta «¿Salir de Arkpm?» (también desactivable en ⚙ → Al salir).
+
 ## Cómo se conecta (seguridad)
 
 * **Huella del servidor (TOFU)**: la primera vez se muestra la huella SHA256 y se pide confirmarla; si después cambia, se avisa y se corta **antes de enviar la contraseña**.
@@ -84,6 +94,7 @@ ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave npm run test:ss
 ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave ARKPM_TEST_APP=miapp node scripts/test-remote-scripts.js   # backup, deploy, restaurar, PM2
 ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave ARKPM_TEST_APP=miapp node scripts/test-monitor.js   # vigilante: avisos de inicio/detención/reinicio, silenciado y pérdida de conexión
 xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-electron.js            # app completa con capturas (Linux)
+xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-cambios.js              # iconos, pestañas, configuración persistente y opciones de escritorio
 ```
 > Esos tests escriben en la carpeta de la app indicada: úsalos con una app de prueba.
 

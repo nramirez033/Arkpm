@@ -6,23 +6,32 @@ import { IconComponent } from './icon.component';
 import { LayoutService } from './layout.service';
 import { Pm2Group, TrackedApp } from './models';
 import { NewServiceComponent } from './new-service.component';
+import { ServerActionsComponent } from './server-actions.component';
 import { ServerInfoComponent } from './server-info.component';
-import { WorkspaceService } from './workspace.service';
+import { ServerTab, WorkspaceService } from './workspace.service';
+
+const SERVER_TABS: { id: ServerTab; label: string; icon: string }[] = [
+  { id: 'estado', label: 'Estado', icon: 'activity' },
+  { id: 'apps', label: 'Apps', icon: 'package' },
+  { id: 'acciones', label: 'Acciones', icon: 'gear' },
+];
 
 @Component({
   selector: 'app-app-list',
   standalone: true,
-  imports: [IconComponent, FormsModule, NewServiceComponent, ServerInfoComponent],
+  imports: [IconComponent, FormsModule, NewServiceComponent, ServerInfoComponent, ServerActionsComponent],
   template: `
     <div class="head">
       @if (layout.layout() === 'phone') { <button class="btn ghost icon" (click)="ws.back()" aria-label="Volver"><app-icon name="arrow-left" /></button> }
       <div class="grow" style="min-width:0"><h2 class="ell">{{ ws.profile()?.name || 'Apps' }}</h2>
         <div class="small mut ell">{{ stateText() }}</div></div>
       <button class="btn ghost icon sm" (click)="ws.profileId() && (ws.conn.isConnected(ws.profileId()!) ? ws.refresh(true) : ws.connect())" aria-label="Actualizar" [disabled]="ws.loading()"><app-icon name="refresh" [class.spin]="ws.loading()" /></button>
-      <button class="btn sm" (click)="openAdd()" [disabled]="!ws.profile()"><app-icon name="plus" [size]="16" />App</button>
+      @if (!phone()) { <button class="btn sm icon" (click)="openAdd()" [disabled]="!ws.profile()" aria-label="Agregar app" title="Agregar app"><app-icon name="plus" [size]="18" /></button> }
     </div>
     <div class="scroll">
       @if (!ws.profile()) { <div class="empty"><app-icon name="server" [size]="36" /><div>Elige un servidor.</div></div> }
+      @else if (phone() && ws.serverTab() === 'estado') { <div style="margin:0 4px"><app-server-info /></div> }
+      @else if (phone() && ws.serverTab() === 'acciones') { <div style="margin:0 4px"><app-server-actions /></div> }
       @else {
         @if (ws.state() !== 'connected') {
           <div class="banner" [class.err]="ws.state() === 'error'" style="margin:4px 4px 10px"><app-icon name="alert" />
@@ -31,7 +40,7 @@ import { WorkspaceService } from './workspace.service';
         } @else if (ws.listError()) {
           <div class="banner err" style="margin:4px 4px 10px"><app-icon name="alert" /><div>{{ ws.listError() }}</div></div>
         }
-        @if (layout.layout() === 'phone') { <div style="margin:0 4px 10px"><app-server-info [compact]="true" /></div> }
+        @if (phone() && ws.apps().length) { <button class="btn sec addapp" (click)="openAdd()"><app-icon name="plus" [size]="16" />Agregar app</button> }
         @if (!ws.apps().length) {
           <div class="empty"><app-icon name="package" [size]="40" /><div style="margin:6px 0 14px">Aún no agregaste apps de este servidor.<br>Elige entre las que ya están registradas en PM2.</div>
             <button class="btn" (click)="openAdd()" [disabled]="ws.state() !== 'connected'"><app-icon name="plus" />Agregar app de PM2</button></div>
@@ -49,6 +58,10 @@ import { WorkspaceService } from './workspace.service';
         </div>
       }
     </div>
+
+    @if (phone() && ws.profile()) {
+      <nav class="bottom">@for (t of serverTabs; track t.id) { <button [class.on]="ws.serverTab() === t.id" (click)="ws.serverTab.set(t.id)"><app-icon [name]="t.icon" [size]="22" /><span>{{ t.label }}</span></button> }</nav>
+    }
 
     @if (adding()) {
       <div class="backdrop" (mousedown)="$event.target === $event.currentTarget && adding.set(false)"><div class="modal" role="dialog">
@@ -70,6 +83,10 @@ import { WorkspaceService } from './workspace.service';
   styles: [`
     :host { display:flex; flex-direction:column; min-height:0; flex:1; }
     .head { display:flex; align-items:center; gap:6px; padding:10px 12px 6px; } .scroll { overflow:auto; padding:4px 8px 12px; flex:1; }
+    .addapp { width:calc(100% - 8px); margin:0 4px 10px; justify-content:center; }
+    .bottom { display:flex; flex:none; background:var(--card); border-top:1px solid var(--line); padding-bottom:var(--sab); }
+    .bottom button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:2px; background:none; border:0; color:var(--mut); padding:8px 2px 6px; min-height:58px; cursor:pointer; font:inherit; }
+    .bottom button span { font-size:11px; } .bottom button.on { color:var(--acc2); box-shadow:inset 0 2px 0 var(--acc); }
     @media (max-width:719px) { .head { padding-top:calc(8px + var(--sat)); } .item { background:var(--card); border:1px solid var(--line); margin-bottom:8px; min-height:64px; } }
   `],
 })
@@ -81,6 +98,8 @@ export class AppListComponent {
   readonly adding = signal(false);
   readonly mode = signal<'existing' | 'new'>('existing');
   readonly fmt = fmtBytes;
+  readonly serverTabs = SERVER_TABS;
+  readonly phone = computed(() => this.layout.layout() === 'phone');
 
   readonly available = computed(() => { const have = new Set(this.ws.apps().map((a) => a.pm2Name)); return this.ws.groups().filter((g) => !have.has(g.name)); });
   readonly stateText = computed(() => ({ connected: 'Conectado' + (this.ws.lastUpdate() ? '' : ''), connecting: 'Conectando…', error: 'Error de conexión', disconnected: 'Desconectado' })[this.ws.state()]);

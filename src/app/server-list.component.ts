@@ -4,6 +4,7 @@ import { DialogService, ToastService } from './dialog.service';
 import { IconComponent } from './icon.component';
 import { LayoutService } from './layout.service';
 import { ServerProfile } from './models';
+import { ServerActionsService } from './server-actions.service';
 import { ServerEditorComponent } from './server-editor.component';
 import { SettingsComponent } from './settings.component';
 import { StoreService } from './store.service';
@@ -18,7 +19,7 @@ import { WorkspaceService } from './workspace.service';
     <div class="head row">
       <h2 class="grow">Servidores</h2>
       <button class="btn ghost icon sm" (click)="settings.set(true)" aria-label="Notificaciones y segundo plano" title="Notificaciones y segundo plano"><app-icon name="gear" /></button>
-      <button class="btn sm" (click)="edit.set({ p: null })"><app-icon name="plus" [size]="16" />Agregar</button>
+      <button class="btn sm icon" (click)="edit.set({ p: null })" aria-label="Agregar servidor" title="Agregar servidor"><app-icon name="plus" [size]="18" /></button>
     </div>
     <div class="scroll">
       @if (!store.profiles().length) {
@@ -52,6 +53,7 @@ export class ServerListComponent {
   readonly layout = inject(LayoutService);
   private readonly dialogs = inject(DialogService);
   private readonly toast = inject(ToastService);
+  private readonly actions = inject(ServerActionsService);
   readonly edit = signal<{ p: ServerProfile | null } | null>(null);
   readonly settings = signal(false);
 
@@ -76,18 +78,10 @@ export class ServerListComponent {
       { id: 'del', label: 'Eliminar servidor', icon: 'trash', danger: true },
     ]);
     if (r === 'conn') this.open(p);
-    else if (r === 'disc') await this.conn.disconnect(p.id);
+    else if (r === 'disc') await this.actions.disconnect(p);
     else if (r === 'edit') this.edit.set({ p });
-    else if (r === 'forget') { await this.conn.forgetSecret(p.id); await this.store.saveProfile({ ...p, remember: false }); this.toast.ok('Credenciales olvidadas'); }
-    else if (r === 'del') {
-      const n = this.store.apps().filter((a) => a.profileId === p.id).length;
-      if (await this.dialogs.confirm({ title: 'Eliminar servidor', message: `Se quitará «${p.name}» de esta app${n ? ` junto con sus ${n} app(s) agregadas y su historial` : ''}. No se toca nada en el servidor.`, okText: 'Eliminar', danger: true })) {
-        await this.conn.disconnect(p.id);
-        await this.conn.forgetSecret(p.id);
-        await this.store.deleteProfile(p.id);
-        if (this.ws.profileId() === p.id) { this.ws.profileId.set(null); this.ws.appId.set(null); this.ws.phoneView.set('servers'); }
-      }
-    }
+    else if (r === 'forget') await this.actions.forgetCredentials(p);
+    else if (r === 'del') await this.actions.remove(p);
   }
 
   onSaved(p: ServerProfile) { if (!this.ws.profileId()) this.open(p); }

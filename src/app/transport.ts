@@ -30,6 +30,8 @@ export interface MonitorConfig {
 }
 export interface MonitorStatus { id: string; state: 'up' | 'down' | 'skipped' | 'error' | 'pending' | 'off'; reason: string; }
 export type NotifyPermission = 'granted' | 'denied' | 'prompt';
+/** Opciones propias de la app de escritorio. `supported` = el sistema permite registrar el inicio automático (Windows/macOS, versión instalada o portable). */
+export interface DesktopOptions { autoStart: boolean; startHidden: boolean; minimizeToBackground: boolean; confirmClose: boolean; supported: boolean; platform: string; }
 
 export interface ExecResult { code: number; stdout: string; stderr: string; }
 export interface LocalFile { ref: string; name: string; size: number; }
@@ -73,6 +75,9 @@ export interface SshTransport {
   monitorStatus(): Promise<MonitorStatus[]>;
   monitorMute(serverId: string, name: string): Promise<void>;
   notifyTest(): Promise<void>;
+  /** Solo escritorio (en Android devuelve null). */
+  desktopGet(): Promise<DesktopOptions | null>;
+  desktopSet(patch: Partial<Pick<DesktopOptions, 'autoStart' | 'startHidden' | 'minimizeToBackground' | 'confirmClose'>>): Promise<DesktopOptions | null>;
   notifyPermission(): Promise<NotifyPermission>;
   requestNotifyPermission(): Promise<NotifyPermission>;
   /** Android: avisa de que la app pasó a segundo plano y sigue vigilando. */

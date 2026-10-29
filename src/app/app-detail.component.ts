@@ -10,10 +10,10 @@ import { Tab, WorkspaceService } from './workspace.service';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'estado', label: 'Estado', icon: 'activity' },
-  { id: 'logs', label: 'Logs', icon: 'terminal' },
   { id: 'archivos', label: 'Archivos', icon: 'folder' },
   { id: 'deploy', label: 'Deploy', icon: 'deploy' },
   { id: 'backup', label: 'Backup', icon: 'archive' },
+  { id: 'logs', label: 'Logs', icon: 'terminal' },
 ];
 
 /** Detalle de una app: cabecera, pestañas (arriba en tableta/escritorio, abajo en el teléfono) y su contenido. */

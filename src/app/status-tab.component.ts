@@ -22,10 +22,10 @@ import { WorkspaceService } from './workspace.service';
             <span class="badge" [class]="'badge ' + cls(g.status)"><span class="dot" [class]="cls(g.status)"></span>{{ txt(g.status) }}</span>
             <span class="mut small">PM2: <b class="mono">{{ g.name }}</b></span>
             <span class="grow"></span>
-            <button class="btn" (click)="ws.act('start', g.name)" [disabled]="!!ws.busy() || g.status === 'online'"><app-icon name="play" [size]="16" />Iniciar</button>
-            <button class="btn sec" (click)="stop()" [disabled]="!!ws.busy() || g.status === 'stopped'"><app-icon name="stop" [size]="16" />Detener</button>
-            <button class="btn sec" (click)="ws.act('restart', g.name)" [disabled]="!!ws.busy()"><app-icon name="restart" [size]="16" />Reiniciar</button>
-            @if (g.procs[0].mode === 'cluster') { <button class="btn sec" (click)="ws.act('reload', g.name)" [disabled]="!!ws.busy()" title="Reinicio sin cortar el servicio (cluster)"><app-icon name="refresh" [size]="16" />Recargar</button> }
+            <button class="btn icon" (click)="ws.act('start', g.name)" [disabled]="!!ws.busy() || g.status === 'online'" aria-label="Iniciar" title="Iniciar"><app-icon name="play" [size]="18" /></button>
+            <button class="btn sec icon" (click)="stop()" [disabled]="!!ws.busy() || g.status === 'stopped'" aria-label="Detener" title="Detener"><app-icon name="stop" [size]="18" /></button>
+            <button class="btn sec icon" (click)="ws.act('restart', g.name)" [disabled]="!!ws.busy()" aria-label="Reiniciar" title="Reiniciar"><app-icon name="restart" [size]="18" /></button>
+            @if (g.procs[0].mode === 'cluster') { <button class="btn sec icon" (click)="ws.act('reload', g.name)" [disabled]="!!ws.busy()" aria-label="Recargar" title="Recargar: reinicio sin cortar el servicio (cluster)"><app-icon name="refresh" [size]="18" /></button> }
             <button class="btn ghost icon" (click)="more()" aria-label="Más acciones"><app-icon name="more" /></button>
           </div>
           @if (ws.busy()) { <div class="bar ind" style="margin-top:12px"><div></div></div> }

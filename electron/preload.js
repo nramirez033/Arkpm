@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   secretSave: inv('secret:save'), secretLoad: inv('secret:load'), secretDelete: inv('secret:delete'),
   dbExec: inv('db:exec'), dbRun: inv('db:run'), dbAll: inv('db:all'), dbTx: inv('db:tx'),
   monitorConfigure: inv('monitor:configure'), monitorStatus: inv('monitor:status'), monitorMute: inv('monitor:mute'),
+  desktopGet: inv('desktop:get'), desktopSet: inv('desktop:set'),
   notifyTest: inv('notify:test'), notifyPermission: inv('notify:permission'), onNotifyClick: on('notify:click'),
   winMinimize: inv('win:minimize'), winToggleMax: inv('win:toggleMax'), winClose: inv('win:close'), winIsMax: inv('win:isMax'),
   onWinState: on('win:state'), platform: inv('app:platform'),

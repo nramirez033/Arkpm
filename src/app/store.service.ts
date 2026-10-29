@@ -1,6 +1,6 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
-import { BackupRecord, DEFAULT_CONFIG, DeployRecord, ServerProfile, TrackedApp } from './models';
+import { AppConfig, BackupRecord, DEFAULT_CONFIG, DeployRecord, ServerProfile, TrackedApp } from './models';
 import { platformKind } from './transport';
 
 interface Row { kind: string; id: string; json: string; }
@@ -51,7 +51,14 @@ class LocalStorageBackend implements Backend {
 @Injectable({ providedIn: 'root' })
 export class StoreService {
   readonly profiles = signal<ServerProfile[]>([]);
-  readonly apps = signal<TrackedApp[]>([]);
+  private readonly rawApps = signal<TrackedApp[]>([]);
+  /**
+   * Configuración de Deploy y Backup por «servidor:puerto + servicio de PM2», NO por usuario SSH ni por perfil:
+   * así se conserva si cambias el usuario, editas el servidor, lo eliminas y lo vuelves a agregar, o agregas otro
+   * perfil (otro usuario) para el mismo servidor. Se guarda en documentos propios («appcfg»).
+   */
+  private readonly cfgs = signal<Record<string, AppConfig>>({});
+  readonly apps = computed<TrackedApp[]>(() => { const c = this.cfgs(); return this.rawApps().map((a) => ({ ...a, config: c[this.cfgKey(a.profileId, a.pm2Name)] ?? a.config })); });
   readonly backups = signal<BackupRecord[]>([]);
   readonly deploys = signal<DeployRecord[]>([]);
   fallbackReason: string | null = null;
@@ -67,7 +74,15 @@ export class StoreService {
     const rows = await this.be.all();
     const parse = <T>(k: string) => rows.filter((r) => r.kind === k).map((r) => { try { return JSON.parse(r.json) as T; } catch { return null; } }).filter((x): x is T => !!x);
     this.profiles.set(parse<ServerProfile>('profile').sort((a, b) => a.createdAt - b.createdAt));
-    this.apps.set(parse<TrackedApp>('app').map((a) => ({ ...a, config: this.mergeConfig(a.config) })).sort((a, b) => a.createdAt - b.createdAt));
+    this.rawApps.set(parse<TrackedApp>('app').map((a) => ({ ...a, config: this.mergeConfig(a.config) })).sort((a, b) => a.createdAt - b.createdAt));
+    const shared: Record<string, AppConfig> = {};
+    for (const r of rows) if (r.kind === 'appcfg') { try { shared[r.id] = this.mergeConfig(JSON.parse(r.json)); } catch { /* ignora */ } }
+    // migración: las configuraciones que solo vivían dentro de la app pasan al almacén compartido
+    for (const a of this.rawApps()) {
+      const k = this.cfgKey(a.profileId, a.pm2Name);
+      if (!(k in shared)) { shared[k] = a.config; await this.be.put('appcfg', k, JSON.stringify(a.config)); }
+    }
+    this.cfgs.set(shared);
     this.backups.set(parse<BackupRecord>('backup').sort((a, b) => b.createdAt - a.createdAt));
     this.deploys.set(parse<DeployRecord>('deploy').sort((a, b) => b.at - a.at));
     for (const r of rows) {
@@ -90,23 +105,34 @@ export class StoreService {
   }
   async deleteProfile(id: string) {
     await this.ready;
-    for (const a of this.apps().filter((a) => a.profileId === id)) await this.deleteApp(a.id);
+    for (const a of this.rawApps().filter((a) => a.profileId === id)) await this.deleteApp(a.id);
     await this.be.del('profile', id);
     this.profiles.update((l) => l.filter((x) => x.id !== id));
   }
 
   // ---- apps ----
+  /** Clave estable de una app: servidor (host:puerto) + nombre en PM2. Si el perfil no existe, cae al id del perfil. */
+  private cfgKey(profileId: string, pm2Name: string): string {
+    const p = this.profiles().find((x) => x.id === profileId);
+    return `${p ? this.pinKey(p.host, p.port) : 'perfil:' + profileId}|${pm2Name}`;
+  }
+  /** Configuración ya guardada para ese servidor + servicio (para reutilizarla al agregar la app de nuevo). */
+  sharedConfigFor(profileId: string, pm2Name: string): AppConfig | null { return this.cfgs()[this.cfgKey(profileId, pm2Name)] ?? null; }
+
   async saveApp(a: TrackedApp) {
     await this.ready;
     await this.be.put('app', a.id, JSON.stringify(a));
-    this.apps.update((l) => (l.some((x) => x.id === a.id) ? l.map((x) => (x.id === a.id ? a : x)) : [...l, a]));
+    const k = this.cfgKey(a.profileId, a.pm2Name);
+    await this.be.put('appcfg', k, JSON.stringify(a.config));
+    this.cfgs.update((c) => ({ ...c, [k]: a.config }));
+    this.rawApps.update((l) => (l.some((x) => x.id === a.id) ? l.map((x) => (x.id === a.id ? a : x)) : [...l, a]));
   }
   async deleteApp(id: string) {
     await this.ready;
     await this.be.del('app', id);
     for (const b of this.backups().filter((b) => b.appId === id)) await this.be.del('backup', b.id);
     for (const d of this.deploys().filter((d) => d.appId === id)) await this.be.del('deploy', d.id);
-    this.apps.update((l) => l.filter((x) => x.id !== id));
+    this.rawApps.update((l) => l.filter((x) => x.id !== id));   // la configuración compartida (appcfg) se conserva a propósito
     this.backups.update((l) => l.filter((x) => x.appId !== id));
     this.deploys.update((l) => l.filter((x) => x.appId !== id));
   }

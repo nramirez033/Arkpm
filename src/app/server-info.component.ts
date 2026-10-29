@@ -13,7 +13,6 @@ import { WorkspaceService } from './workspace.service';
       <div class="head row">
         <div class="grow" style="min-width:0"><h2 class="ell">{{ i()?.host || p.name }}</h2>
           <div class="small mut ell">{{ i() ? i()!.os + ' · kernel ' + i()!.kernel : p.username + '@' + p.host }}</div></div>
-        <button class="btn sm ghost icon" (click)="ws.refreshInfo()" aria-label="Actualizar" [disabled]="ws.infoLoading()"><app-icon name="refresh" [class.spin]="ws.infoLoading()" /></button>
       </div>
       @if (ws.infoError()) { <div class="banner err"><app-icon name="alert" /><div>{{ ws.infoError() }}</div></div> }
       @if (ws.state() !== 'connected') { <div class="banner"><app-icon name="alert" /><div class="grow">Conecta con el servidor para ver su información.</div><button class="btn sm" (click)="ws.connect()">Conectar</button></div> }

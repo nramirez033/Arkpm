@@ -25,6 +25,19 @@ let monitor = null;
 let tray = null;
 let quitting = false;
 
+// ---- opciones de escritorio (inicio con el sistema, inicio oculto, minimizar a segundo plano) ----
+let desktop = { autoStart: false, startHidden: false, minimizeToBackground: false, confirmClose: true };
+const desktopFile = () => path.join(app.getPath('userData'), 'desktop.json');
+const loginSupported = () => (process.platform === 'win32' || process.platform === 'darwin') && (app.isPackaged || !!process.env.PORTABLE_EXECUTABLE_FILE);
+function loadDesktop() { try { desktop = { ...desktop, ...JSON.parse(fs.readFileSync(desktopFile(), 'utf8')) }; } catch { /* valores por defecto */ } }
+function saveDesktop() { try { fs.writeFileSync(desktopFile(), JSON.stringify(desktop)); } catch (e) { console.warn('No se pudo guardar desktop.json:', e.message); } }
+/** Registra (o quita) el inicio con Windows. En la versión portable se usa la ruta del .exe real, no la del descompresor temporal. */
+function applyLoginItem() {
+  if (!loginSupported()) return;
+  try { app.setLoginItemSettings({ openAtLogin: !!desktop.autoStart, path: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, args: [] }); }
+  catch (e) { console.warn('No se pudo configurar el inicio con el sistema:', e.message); }
+}
+
 function findIcon() {
   for (const f of [path.join(process.resourcesPath || '', 'icon.png'), path.join(baseDir, 'resources', 'icon.png'), path.join(__dirname, '..', 'resources', 'icon.png'), path.join(__dirname, 'icon.png')]) {
     if (!fs.existsSync(f)) continue;
@@ -54,6 +67,34 @@ const loadSecretFor = async (id) => {
 const bgEnabled = () => !!(monitor && monitor.cfg.enabled && monitor.cfg.background);
 const watchedCount = () => (monitor ? monitor.cfg.servers.filter((s) => s.notify).length : 0);
 
+function hideToTray() {
+  if (!win || win.isDestroyed()) return;
+  win.hide(); updateTray();
+  notify({ title: 'Arkpm sigue en segundo plano', body: `Vigilando ${watchedCount()} servidor(es). Haz clic aquí o en el icono de la bandeja para abrirlo.`, serverId: '' });
+}
+
+let asking = false;
+/** Pregunta antes de cerrar. Con segundo plano activo ofrece pasar a segundo plano, salir del todo o cancelar. */
+async function askBeforeClosing() {
+  if (asking || !win || win.isDestroyed()) return;
+  asking = true;
+  try {
+    const bg = bgEnabled();
+    const buttons = bg ? ['Pasar a segundo plano', 'Salir de Arkpm', 'Cancelar'] : ['Cerrar Arkpm', 'Cancelar'];
+    const r = await dialog.showMessageBox(win, {
+      type: 'question', buttons, defaultId: 0, cancelId: buttons.length - 1, noLink: true, title: 'Arkpm',
+      message: bg ? '¿Qué quieres hacer con Arkpm?' : '¿Cerrar Arkpm?',
+      detail: bg ? `Si pasa a segundo plano seguirá vigilando ${watchedCount()} servidor(es) desde la bandeja del sistema. Si sales, dejará de vigilar y de avisarte.` : 'Se cerrarán las conexiones con tus servidores.',
+      checkboxLabel: 'No volver a preguntar', checkboxChecked: false,
+    });
+    const cancelled = r.response === buttons.length - 1;
+    if (r.checkboxChecked && !cancelled) { desktop.confirmClose = false; saveDesktop(); }
+    if (cancelled) return;
+    if (bg && r.response === 0) hideToTray();
+    else { quitting = true; app.quit(); }
+  } finally { asking = false; }
+}
+
 function showWindow() {
   if (!win) { createWindow(); return; }
   if (win.isMinimized()) win.restore();
@@ -67,8 +108,10 @@ function notify(n) {
   nt.show();
 }
 
+const wantTray = () => bgEnabled() || desktop.minimizeToBackground || desktop.startHidden;
+
 function updateTray() {
-  if (!bgEnabled()) { if (tray) { tray.destroy(); tray = null; } return; }
+  if (!wantTray()) { if (tray) { tray.destroy(); tray = null; } return; }
   if (!tray) {
     const img = findIcon();
     tray = new Tray(img ? img.resize({ width: 16, height: 16 }) : nativeImage.createEmpty());
@@ -76,10 +119,10 @@ function updateTray() {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Abrir Arkpm', click: showWindow },
       { type: 'separator' },
-      { label: 'Salir (dejar de vigilar)', click: () => { quitting = true; app.quit(); } },
+      { label: 'Salir', click: () => { quitting = true; app.quit(); } },
     ]));
   }
-  tray.setToolTip(`Arkpm · vigilando ${watchedCount()} servidor(es)`);
+  tray.setToolTip(bgEnabled() ? `Arkpm · vigilando ${watchedCount()} servidor(es)` : 'Arkpm');
 }
 
 function initMonitor() {
@@ -95,6 +138,12 @@ function registerIpc() {
   ipcMain.handle('monitor:configure', (_e, cfg) => {
     try { fs.writeFileSync(monitorFile(), JSON.stringify(cfg), { mode: 0o600 }); } catch (e) { console.warn('No se pudo guardar monitor.json:', e.message); }
     monitor.configure(cfg); updateTray();
+  });
+  ipcMain.handle('desktop:get', () => ({ ...desktop, supported: loginSupported(), platform: process.platform }));
+  ipcMain.handle('desktop:set', (_e, patch) => {
+    for (const k of ['autoStart', 'startHidden', 'minimizeToBackground', 'confirmClose']) if (typeof patch[k] === 'boolean') desktop[k] = patch[k];
+    saveDesktop(); applyLoginItem(); updateTray();
+    return { ...desktop, supported: loginSupported(), platform: process.platform };
   });
   ipcMain.handle('monitor:status', () => monitor.status());
   ipcMain.handle('monitor:mute', (_e, serverId, name) => monitor.mute(serverId, name));
@@ -161,7 +210,9 @@ function registerIpc() {
 function createWindow() {
   Menu.setApplicationMenu(null);
   const isWin = process.platform === 'win32';
+  const startHidden = desktop.startHidden || process.argv.includes('--hidden');
   win = new BrowserWindow({
+    show: !startHidden,
     width: 1200, height: 780, minWidth: 820, minHeight: 560,
     backgroundColor: '#161717', autoHideMenuBar: true, icon: findIcon(),
     // Windows 11: botones nativos de la ventana (con diseños de ajuste al pasar sobre «maximizar») sobre nuestra barra
@@ -169,14 +220,28 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
   });
   win.on('close', (e) => {
+    if (quitting) return;
     // con «segundo plano» activo, cerrar la ventana solo la oculta: el vigilante sigue y la app queda en la bandeja
-    if (!quitting && bgEnabled()) {
-      e.preventDefault();
-      win.hide();
-      updateTray();
-      notify({ title: 'Arkpm sigue en segundo plano', body: `Vigilando ${watchedCount()} servidor(es). Haz clic aquí o en el icono de la bandeja para abrirlo.`, serverId: '' });
+    if (!desktop.confirmClose) {
+      if (bgEnabled()) { e.preventDefault(); hideToTray(); }
+      return;
     }
+    e.preventDefault();
+    askBeforeClosing();
   });
+  // «al minimizar, pasar a segundo plano»: la ventana se oculta (queda el icono de la bandeja) y una notificación lo avisa
+  win.on('minimize', () => {
+    if (quitting || !desktop.minimizeToBackground) return;
+    setImmediate(() => {
+      if (!win || win.isDestroyed()) return;
+      win.hide(); updateTray();
+      notify({ title: 'Arkpm pasó a segundo plano', body: bgEnabled() ? `Sigue vigilando ${watchedCount()} servidor(es). Haz clic aquí o en el icono de la bandeja para abrirlo.` : 'Está en la bandeja del sistema. Haz clic aquí o en su icono para abrirlo.', serverId: '' });
+    });
+  });
+  if (startHidden) {
+    updateTray();
+    win.webContents.once('did-finish-load', () => notify({ title: 'Arkpm se inició en segundo plano', body: 'Está en la bandeja del sistema. Haz clic aquí o en su icono para abrir la ventana.', serverId: '' }));
+  }
   win.on('session-end', () => { quitting = true; });   // apagado de Windows: no bloquear con el cierre a bandeja
   win.on('closed', () => { win = null; });
   const sendState = () => { if (win && !win.isDestroyed()) win.webContents.send('win:state', { maximized: win.isMaximized() }); };
@@ -189,7 +254,7 @@ function createWindow() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => showWindow());
-  app.whenReady().then(() => { initDb(); registerIpc(); createWindow(); });
+  app.whenReady().then(() => { loadDesktop(); applyLoginItem(); initDb(); registerIpc(); createWindow(); });
 }
 app.on('before-quit', () => { quitting = true; try { monitor && monitor.shutdown(); ssh && ssh.disconnectAll(); } catch { /* nada */ } if (db) db.close(); });
 app.on('window-all-closed', () => { if (!bgEnabled() || quitting) app.quit(); });

@@ -97,6 +97,18 @@ export class AppComponent implements OnInit {
     if (this.dialogs.cancelTop()) return;
     if (this.layout.layout() === 'phone') { if (this.ws.back()) return; }
     else if (this.ws.appId()) { this.ws.appId.set(null); return; }
+    this.confirmExit();
+  }
+
+  private async confirmExit() {
+    const bg = this.notify.settings().enabled && this.notify.settings().background;
+    if (this.store.getSetting<boolean>('confirmExit', true)) {
+      const ok = await this.dialogs.confirm({
+        title: 'Salir de Arkpm', okText: 'Salir',
+        message: bg ? 'La app se cerrará, pero seguirá vigilando tus servidores en segundo plano (verás su notificación permanente).' : '¿Quieres cerrar Arkpm?',
+      });
+      if (!ok) return;
+    }
     App.exitApp();
   }
 }

@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import { cleanError, type MonitorConfig, type MonitorStatus, type NotifyPermission, type ConnectOpts, type ConnectResult, type ExecResult, type LocalFile, type ProgressEvent, type SshTransport, type StreamEvent, type UploadItem } from './transport';
+import { cleanError, type DesktopOptions, type MonitorConfig, type MonitorStatus, type NotifyPermission, type ConnectOpts, type ConnectResult, type ExecResult, type LocalFile, type ProgressEvent, type SshTransport, type StreamEvent, type UploadItem } from './transport';
 import type { RemoteEntry } from './models';
 
 /** Plugin Kotlin: android-native/kotlin/ArkpmSshPlugin.kt (JSch). */
@@ -72,6 +72,8 @@ export class CapacitorTransport implements SshTransport {
   monitorConfigure(cfg: MonitorConfig) { return this.call(() => Plugin.monitorConfigure({ config: JSON.stringify(cfg) })); }
   async monitorStatus() { return (await this.call(() => Plugin.monitorStatus())).servers; }
   monitorMute(serverId: string, name: string) { return this.call(() => Plugin.monitorMute({ serverId, name })); }
+  async desktopGet(): Promise<DesktopOptions | null> { return null; }
+  async desktopSet(): Promise<DesktopOptions | null> { return null; }
   notifyTest() { return this.call(() => Plugin.notifyTest()); }
   async notifyPermission() { return (await this.call(() => Plugin.notifPermission())).state; }
   async requestNotifyPermission() { return (await this.call(() => Plugin.requestNotifPermission())).state; }
