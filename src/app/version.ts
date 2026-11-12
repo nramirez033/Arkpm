@@ -1,11 +1,11 @@
 // Generado por scripts/version.js (no editar a mano)
 export const VERSIONS = {
   "android": {
-    "version": "1.0.0",
-    "date": "28102026"
+    "version": "1.0.11",
+    "date": "01112026"
   },
   "electron": {
-    "version": "1.0.0",
-    "date": "28102026"
+    "version": "1.0.5",
+    "date": "01112026"
   }
 } as const;

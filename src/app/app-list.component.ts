@@ -8,18 +8,20 @@ import { Pm2Group, TrackedApp } from './models';
 import { NewServiceComponent } from './new-service.component';
 import { ServerActionsComponent } from './server-actions.component';
 import { ServerInfoComponent } from './server-info.component';
+import { NginxComponent } from './nginx.component';
 import { ServerTab, WorkspaceService } from './workspace.service';
 
 const SERVER_TABS: { id: ServerTab; label: string; icon: string }[] = [
   { id: 'estado', label: 'Estado', icon: 'activity' },
   { id: 'apps', label: 'Apps', icon: 'package' },
   { id: 'acciones', label: 'Acciones', icon: 'gear' },
+  { id: 'nginx', label: 'Nginx', icon: 'globe' },
 ];
 
 @Component({
   selector: 'app-app-list',
   standalone: true,
-  imports: [IconComponent, FormsModule, NewServiceComponent, ServerInfoComponent, ServerActionsComponent],
+  imports: [IconComponent, FormsModule, NewServiceComponent, ServerInfoComponent, ServerActionsComponent, NginxComponent],
   template: `
     <div class="head">
       @if (layout.layout() === 'phone') { <button class="btn ghost icon" (click)="ws.back()" aria-label="Volver"><app-icon name="arrow-left" /></button> }
@@ -32,6 +34,7 @@ const SERVER_TABS: { id: ServerTab; label: string; icon: string }[] = [
       @if (!ws.profile()) { <div class="empty"><app-icon name="server" [size]="36" /><div>Elige un servidor.</div></div> }
       @else if (phone() && ws.serverTab() === 'estado') { <div style="margin:0 4px"><app-server-info /></div> }
       @else if (phone() && ws.serverTab() === 'acciones') { <div style="margin:0 4px"><app-server-actions /></div> }
+      @else if (phone() && ws.serverTab() === 'nginx') { <div style="margin:0 4px"><app-nginx /></div> }
       @else {
         @if (ws.state() !== 'connected') {
           <div class="banner" [class.err]="ws.state() === 'error'" style="margin:4px 4px 10px"><app-icon name="alert" />

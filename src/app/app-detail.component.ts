@@ -5,7 +5,9 @@ import { FilesTabComponent } from './files-tab.component';
 import { IconComponent } from './icon.component';
 import { LayoutService } from './layout.service';
 import { LogsTabComponent } from './logs-tab.component';
+import { NotesTabComponent } from './notes-tab.component';
 import { StatusTabComponent } from './status-tab.component';
+import { TerminalTabComponent } from './terminal-tab.component';
 import { Tab, WorkspaceService } from './workspace.service';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -13,14 +15,16 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'archivos', label: 'Archivos', icon: 'folder' },
   { id: 'deploy', label: 'Deploy', icon: 'deploy' },
   { id: 'backup', label: 'Backup', icon: 'archive' },
-  { id: 'logs', label: 'Logs', icon: 'terminal' },
+  { id: 'terminal', label: 'Terminal', icon: 'terminal' },
+  { id: 'notas', label: 'Notas', icon: 'edit' },
+  { id: 'logs', label: 'Logs', icon: 'file-text' },
 ];
 
 /** Detalle de una app: cabecera, pestañas (arriba en tableta/escritorio, abajo en el teléfono) y su contenido. */
 @Component({
   selector: 'app-detail',
   standalone: true,
-  imports: [IconComponent, StatusTabComponent, LogsTabComponent, FilesTabComponent, DeployTabComponent, BackupTabComponent],
+  imports: [IconComponent, StatusTabComponent, LogsTabComponent, FilesTabComponent, DeployTabComponent, BackupTabComponent, TerminalTabComponent, NotesTabComponent],
   template: `
     @if (ws.app(); as a) {
       <header class="dh">
@@ -40,6 +44,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
         @if (seen().has('logs')) { <section class="pane fixed" [class.hide]="ws.tab() !== 'logs'"><app-logs-tab [active]="ws.tab() === 'logs'" /></section> }
         @if (seen().has('archivos')) { <section class="pane fixed" [class.hide]="ws.tab() !== 'archivos'"><app-files-tab [active]="ws.tab() === 'archivos'" /></section> }
         @if (seen().has('deploy')) { <section class="pane" [class.hide]="ws.tab() !== 'deploy'"><app-deploy-tab /></section> }
+        @if (seen().has('terminal')) { <section class="pane fixed" [class.hide]="ws.tab() !== 'terminal'"><app-terminal-tab [active]="ws.tab() === 'terminal'" /></section> }
+        @if (seen().has('notas')) { <section class="pane fixed" [class.hide]="ws.tab() !== 'notas'"><app-notes-tab /></section> }
         @if (seen().has('backup')) { <section class="pane" [class.hide]="ws.tab() !== 'backup'"><app-backup-tab /></section> }
       </div>
       @if (layout.layout() === 'phone') {
@@ -54,8 +60,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
     .tabs button:hover { color:var(--txt); } .tabs button.on { color:var(--txt); border-bottom-color:var(--acc); }
     .panes { flex:1; min-height:0; display:flex; flex-direction:column; }
     .pane { flex:1; min-height:0; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; } .pane.fixed { overflow:hidden; } .pane > * { flex:none; } .pane.fixed > * { flex:1; min-height:0; }
-    .bottom { display:flex; flex:none; background:var(--card); border-top:1px solid var(--line); padding-bottom:var(--sab); }
-    .bottom button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:2px; background:none; border:0; color:var(--mut); padding:8px 2px 6px; min-height:58px; cursor:pointer; font:inherit; }
+    .bottom { display:flex; flex:none; overflow-x:auto; scrollbar-width:none; background:var(--card); border-top:1px solid var(--line); padding-bottom:var(--sab); }
+    .bottom button { flex:1 0 54px; min-width:0; display:flex; flex-direction:column; align-items:center; gap:2px; background:none; border:0; color:var(--mut); padding:8px 2px 6px; min-height:58px; cursor:pointer; font:inherit; }
     .bottom button span { font-size:11px; } .bottom button.on { color:var(--acc2); box-shadow:inset 0 2px 0 var(--acc); }
     @media (max-width:719px) { .dh { padding:calc(8px + var(--sat)) 10px 6px; } .pane { padding:10px; } }
   `],

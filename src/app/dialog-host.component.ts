@@ -33,16 +33,16 @@ import { IconComponent } from './icon.component';
               <footer><button class="btn sec" (click)="done(d, null)">Cancelar</button><button class="btn" (click)="done(d, text)">{{ d.okText }}</button></footer>
             }
             @case ('secret') {
-              <header><h3>{{ d.what === 'password' ? 'Contraseña de ' + d.profile.username + '@' + d.profile.host : 'Frase de contraseña de la clave' }}</h3></header>
+              <header><h3>{{ d.what === 'sudo' ? 'Contraseña de sudo de ' + d.profile.username : d.what === 'password' ? 'Contraseña de ' + d.profile.username + '@' + d.profile.host : 'Frase de contraseña de la clave' }}</h3></header>
               <div class="body">
-                @if (d.retry) { <div class="banner err" style="margin-bottom:12px"><app-icon name="alert" /><div>{{ d.what === 'password' ? 'La contraseña no fue aceptada.' : 'La frase no abrió la clave.' }} Inténtalo de nuevo.</div></div> }
-                <div class="field"><label>{{ d.what === 'password' ? 'Contraseña' : 'Frase de contraseña' }}</label>
+                @if (d.retry) { <div class="banner err" style="margin-bottom:12px"><app-icon name="alert" /><div>{{ d.what === 'passphrase' ? 'La frase no abrió la clave.' : d.what === 'sudo' ? 'sudo no aceptó la contraseña (o este usuario no tiene permiso de sudo).' : 'La contraseña no fue aceptada.' }} Inténtalo de nuevo.</div></div> }
+                <div class="field"><label>{{ d.what === 'passphrase' ? 'Frase de contraseña' : d.what === 'sudo' ? 'Contraseña de sudo (solo se usa en esta sesión, no se guarda)' : 'Contraseña' }}</label>
                   <div class="row"><input [type]="show() ? 'text' : 'password'" [(ngModel)]="text" (keydown.enter)="done(d, { value: text, remember })" autocomplete="off" autofocus />
                     <button class="btn sec icon" type="button" (click)="show.set(!show())" aria-label="Mostrar u ocultar"><app-icon name="eye" /></button></div>
                 </div>
-                <label class="chk"><input type="checkbox" [(ngModel)]="remember" /><span>Recordar en este dispositivo (se guarda cifrada)</span></label>
+                @if (d.what !== 'sudo') { <label class="chk"><input type="checkbox" [(ngModel)]="remember" /><span>Recordar en este dispositivo (se guarda cifrada)</span></label> }
               </div>
-              <footer><button class="btn sec" (click)="done(d, null)">Cancelar</button><button class="btn" [disabled]="!text" (click)="done(d, { value: text, remember })">Conectar</button></footer>
+              <footer><button class="btn sec" (click)="done(d, null)">Cancelar</button><button class="btn" [disabled]="!text" (click)="done(d, { value: text, remember })">{{ d.what === 'sudo' ? 'Continuar' : 'Conectar' }}</button></footer>
             }
             @case ('hostkey') {
               <header><h3>{{ d.changed ? '¡La huella del servidor cambió!' : 'Verificar servidor' }}</h3></header>

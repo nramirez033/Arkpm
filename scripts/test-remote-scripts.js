@@ -145,6 +145,81 @@ const APP = process.env.ARKPM_TEST_APP || 'miapp';
   assert(info.disks.length >= 1 && info.disks[0].total > 0 && info.disks[0].used <= info.disks[0].total && info.cpuUse >= 0 && info.cpuUse <= 100, JSON.stringify(info.disks));
   console.log('✔ información del servidor:', info.os, '|', info.cpus, 'CPU |', Math.round(info.memTotal / 1e6), 'MB RAM |', info.disks[0].mount, Math.round(info.disks[0].total / 1e9), 'GB');
 
+  // ---- terminal: un comando por vez, con la carpeta que persiste entre comandos
+  {
+    const runTerm = async (cwd, cmd) => {
+      const r = await run(R.terminalScript(cwd, dir, cmd));   // mismo script que usa la pestaña Terminal
+      const lines = (r.stdout + r.stderr).split('\n')   // en la app va con pty: stderr y stdout llegan juntos
+        .map((l) => l.replace(/\r$/, ''));
+      const mark = lines.map(R.parseTermMarker).filter(Boolean).pop();
+      return { out: lines.filter((l) => !R.parseTermMarker(l)).join('\n').trim(), ...mark };
+    };
+    await ok(`mkdir -p ${R.sq(dir + '/sub dir')} && echo contenido > ${R.sq(dir + '/sub dir/a.txt')}`);
+    let t = await runTerm(dir, 'pwd');
+    assert(t.out === dir && t.code === 0 && t.cwd === dir, JSON.stringify(t));
+    t = await runTerm(t.cwd, 'cd "sub dir"'); assert(t.cwd === dir + '/sub dir' && t.code === 0, JSON.stringify(t));
+    t = await runTerm(t.cwd, 'cat a.txt && echo $PWD'); assert(t.out.startsWith('contenido') && t.cwd === dir + '/sub dir', JSON.stringify(t));
+    t = await runTerm(t.cwd, 'ls no-existe'); assert(t.code !== 0 && /no-existe/.test(t.out), JSON.stringify(t));
+    t = await runTerm(t.cwd, 'echo "comilla sin cerrar'); assert(t.code !== 0 && t.cwd === dir + '/sub dir', 'un error de sintaxis no rompe el marcador: ' + JSON.stringify(t));
+    t = await runTerm(t.cwd, 'exit 7'); assert(t.code === undefined || t.code === 7, 'exit del usuario: ' + JSON.stringify(t));
+    t = await runTerm(dir, 'read x; echo "leido=[$x]"'); assert(/leido=\[\]/.test(t.out), 'sin stdin no se cuelga: ' + JSON.stringify(t));
+    t = await runTerm(dir, 'pm2 jlist | head -c 2; echo; node -v'); assert(/^\[/.test(t.out) && /v\d+/.test(t.out), 'pm2 y node en el PATH: ' + JSON.stringify(t));
+    t = await runTerm('/ruta/que/no/existe', 'pwd'); assert(t.out === dir, 'si la carpeta no existe vuelve a la de la app: ' + JSON.stringify(t));
+    t = await runTerm(dir, "echo 'it''s' \"$((6*7))\" $(whoami)"); assert(/its 42 deploy|its 42 \w+/.test(t.out), JSON.stringify(t));
+    await ok(`rm -rf ${R.sq(dir + '/sub dir')}`);
+    console.log('✔ terminal: carpeta persistente, códigos de salida, errores de sintaxis, sin stdin, PATH de pm2/node');
+  }
+
+  // ---- datos compartidos en el servidor (.arkpm): notas y configuración visibles para cualquier usuario / conexión
+  {
+    const sd = R.sharedDir(dir);
+    await ok(`rm -rf ${R.sq(sd)}`);
+    const rd = async () => R.parseSharedRead(await ok(R.sharedReadScript(sd)));
+    const wr = (rel, field, exp, obj) => m.exec(sid, R.wrap(R.sharedWriteScript(sd, rel, field, exp)), { stdin: JSON.stringify(obj), timeoutMs: 20000 });
+    let r = await rd(); assert(r.state === 'rw' || r.state === 'new', 'estado inicial: ' + r.state); assert(r.notes.length === 0 && r.config === null);
+    const n1 = { id: 'nota-1', text: 'línea 1\nlínea "2" con ñ y \\ barra', createdAt: 1, updatedAt: 1000, author: 'deploy' };
+    let w = await wr('notes/nota-1.json', 'updatedAt', null, n1); assert(w.code === 0 && w.stdout.trim() === 'OK', JSON.stringify(w));
+    r = await rd(); assert(r.state === 'rw' && r.notes.length === 1 && r.notes[0].text === n1.text, 'ida y vuelta de la nota (saltos de línea, comillas, acentos): ' + JSON.stringify(r));
+    // conflicto: alguien la editó mientras tanto
+    w = await wr('notes/nota-1.json', 'updatedAt', 999, { ...n1, text: 'pisada', updatedAt: 2000 }); assert(/CONFLICT/.test(w.stdout) && !/OK/.test(w.stdout), 'detecta edición simultánea: ' + JSON.stringify(w));
+    w = await wr('notes/nota-1.json', 'updatedAt', 1000, { ...n1, text: 'editada', updatedAt: 2000 }); assert(/OK/.test(w.stdout));
+    assert((await rd()).notes[0].text === 'editada');
+    // configuración con revisión
+    w = await wr('config.json', 'rev', null, { rev: 1, deploy: { mode: 'sync' } }); assert(w.code === 0);
+    w = await wr('config.json', 'rev', 5, { rev: 6 }); assert(/CONFLICT/.test(w.stdout), 'config: conflicto de revisión');
+    w = await wr('config.json', 'rev', 1, { rev: 2, deploy: { mode: 'merge' } }); assert(/OK/.test(w.stdout));
+    assert((await rd()).config.deploy.mode === 'merge');
+    assert.throws(() => R.sharedWriteScript(sd, '../../etc/passwd', 'rev', null), /Ruta/); assert.throws(() => R.sharedDeleteScript(sd, '../x'), /Id/);
+    // permisos abiertos y sin archivos temporales sueltos
+    const perms = (await ok(`stat -c '%a' ${R.sq(sd + '/notes/nota-1.json')} ${R.sq(sd + '/config.json')}; ls -A ${R.sq(sd)}`)).trim().split('\n');
+    assert(perms[0] === '666' && perms[1] === '666' && !perms.some((l) => l.startsWith('.tmp')), 'permisos 666 y sin temporales: ' + perms.join(','));
+    // OTRO usuario SSH ve y edita lo mismo (otra conexión, otro usuario)
+    if (process.env.ARKPM_TEST_USER2) {
+      const o2 = { host: o.host, port: o.port, username: process.env.ARKPM_TEST_USER2, password: process.env.ARKPM_TEST_PASS2 };
+      const c2 = await m.connect({ ...o2, expectedFingerprint: fp }); assert(c2.ok, 'conecta el segundo usuario');
+      const run2 = (script, stdin) => m.exec(c2.sessionId, R.wrap(script), { stdin, timeoutMs: 20000 });
+      const r2 = R.parseSharedRead((await run2(R.sharedReadScript(sd))).stdout);
+      assert(r2.state === 'rw' && r2.notes.length === 1 && r2.notes[0].text === 'editada' && r2.config.deploy.mode === 'merge', 'el otro usuario ve las notas y la configuración: ' + JSON.stringify(r2));
+      let w2 = await run2(R.sharedWriteScript(sd, 'notes/nota-2.json', 'updatedAt', null), JSON.stringify({ id: 'nota-2', text: 'del otro usuario', createdAt: 5, updatedAt: 5000, author: o2.username })); assert(/OK/.test(w2.stdout), 'el otro usuario crea una nota: ' + w2.stderr + w2.stdout);
+      w2 = await run2(R.sharedWriteScript(sd, 'notes/nota-1.json', 'updatedAt', 2000), JSON.stringify({ ...n1, text: 'editada por el otro', updatedAt: 6000, author: o2.username })); assert(/OK/.test(w2.stdout), 'el otro usuario edita una nota ajena: ' + w2.stderr + w2.stdout);
+      const r3 = await rd(); assert(r3.notes.length === 2 && r3.notes.find((n) => n.id === 'nota-1').author === o2.username, 'el primer usuario ve lo que escribió el otro');
+      await run2(R.sharedDeleteScript(sd, 'nota-2'));
+      assert((await rd()).notes.length === 1, 'el otro usuario puede borrar una nota');
+      m.disconnect(c2.sessionId);
+      console.log('✔ dos usuarios SSH comparten notas y configuración (leer, crear, editar, borrar)');
+    }
+    // el deploy en modo sync no borra .arkpm y el backup no lo incluye
+    const st2 = `${ark}/staging/${APP}/shared`;
+    await ok(`rm -rf ${R.sq(st2)}; mkdir -p ${R.sq(st2 + '/content')} && echo nuevo > ${R.sq(st2 + '/content/NUEVO')}`);
+    await ok(R.applyScript({ src: st2 + '/content', dir, mode: 'sync', preserve: [], flatten: false }));
+    assert((await rd()).notes.length >= 1, 'el deploy (sync) no borra .arkpm');
+    const arch = `${ark}/backups/${APP}/shared.tar.gz`;
+    await ok(R.backupScript({ dir, mode: 'all-except', includes: [], excludes: [] }, arch));
+    assert(!(await ok(`tar -tzf ${R.sq(arch)}`)).includes('.arkpm'), 'el backup no incluye .arkpm');
+    await ok(`rm -rf ${R.sq(st2)} ${R.sq(arch)} ${R.sq(sd)}`);
+    console.log('✔ datos compartidos en el servidor: ida y vuelta, conflictos, permisos, deploy y backup respetan .arkpm');
+  }
+
   // ---- crear un servicio nuevo en PM2
   const nd = `${ark}/nuevo-svc`;
   await ok(`rm -rf ${R.sq(nd)}; mkdir -p ${R.sq(nd)} && echo 'setInterval(()=>console.log("env="+process.env.MI_VAR+" arg="+process.argv[2]),1000)' > ${R.sq(nd + '/srv-app.js')}`);

@@ -6,7 +6,7 @@ export interface MenuItem { id: string; label: string; icon?: string; danger?: b
 export type DialogReq =
   | { kind: 'confirm'; title: string; message: string; details?: string[]; okText: string; danger: boolean; resolve: (v: boolean) => void }
   | { kind: 'input'; title: string; label: string; value: string; placeholder: string; okText: string; multiline: boolean; resolve: (v: string | null) => void }
-  | { kind: 'secret'; profile: ServerProfile; what: 'password' | 'passphrase'; retry: boolean; resolve: (v: { value: string; remember: boolean } | null) => void }
+  | { kind: 'secret'; profile: ServerProfile; what: 'password' | 'passphrase' | 'sudo'; retry: boolean; resolve: (v: { value: string; remember: boolean } | null) => void }
   | { kind: 'menu'; title: string; items: MenuItem[]; resolve: (v: string | null) => void }
   | { kind: 'hostkey'; profile: ServerProfile; fingerprint: string; changed: boolean; resolve: (v: boolean) => void };
 
@@ -35,7 +35,7 @@ export class DialogService {
   menu(title: string, items: MenuItem[]): Promise<string | null> {
     return new Promise((resolve) => this.push({ kind: 'menu', title, items, resolve }));
   }
-  secret(profile: ServerProfile, what: 'password' | 'passphrase', retry = false) {
+  secret(profile: ServerProfile, what: 'password' | 'passphrase' | 'sudo', retry = false) {
     return new Promise<{ value: string; remember: boolean } | null>((resolve) => this.push({ kind: 'secret', profile, what, retry, resolve }));
   }
   hostKey(profile: ServerProfile, fingerprint: string, changed: boolean) {

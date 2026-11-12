@@ -33,6 +33,34 @@ Ajustes (icono ⚙ de la lista de servidores): activar avisos, elegir qué event
 * Un servicio que se reinicia en bucle avisa como mucho una vez cada 5 minutos.
 * Si no activas el segundo plano, los avisos funcionan solo con la app abierta.
 
+## Nginx (administración del servidor)
+
+Al elegir un servidor: pestaña **Nginx** (escritorio/tableta: junto a *Información*; teléfono: cuarta pestaña del servidor).
+
+* **Estado y control**: versión, activo/detenido; iniciar, detener, reiniciar, recargar y probar la configuración (`nginx -t`). Antes de recargar/reiniciar se prueba la configuración para no tumbar el servicio con un error.
+* **Dominios y sitios**: lee `/etc/nginx` (nginx.conf, `sites-available`/`sites-enabled`, `conf.d`) y muestra por archivo sus bloques `server`: dominios (clic para copiar), tipo (proxy / sitio estático / redirección) y destino, puertos, HTTPS con **días para el vencimiento del certificado**, y si redirige a HTTPS. Búsqueda por dominio.
+* **Editar**: editor de cualquier archivo (incluido `nginx.conf`). Guardar hace copia de seguridad en `/etc/nginx/arkpm-backups`, instala el archivo, ejecuta `nginx -t` y, **si falla, restaura automáticamente la versión anterior** y muestra el error de nginx. «Guardar y recargar» aplica el cambio.
+* **Sitio nuevo**: asistente (proxy a una app de PM2 con WebSocket, sitio estático o SPA, redirección) que valida dominios y destinos, crea el archivo, el enlace en `sites-enabled` y recarga. Opcional: certificado gratuito con **certbot** (Let's Encrypt).
+* **Habilitar / deshabilitar / eliminar** sitios (con copia previa y reversión si algo falla) y **logs** de errores y accesos.
+* **Permisos**: leer no necesita privilegios. Para cambiar algo hace falta **root o sudo**: si el sudo del usuario pide contraseña se pregunta una vez y se recuerda **solo en memoria** mientras la app está abierta (viaja por la entrada estándar, nunca en la línea de comandos). Sin sudo, la pantalla queda en solo lectura.
+* Detecta si el servidor no tiene IPv6 para no generar `listen [::]:80` (que nginx rechazaría).
+
+## Datos compartidos en el servidor (notas y configuración)
+
+Las **notas** y la **configuración de Deploy y Backup** se guardan en el servidor, en `<carpeta de la app>/.arkpm/` (`notes/<id>.json` y `config.json`): así las ven todos los usuarios SSH y todas las conexiones (otro dispositivo, otra IP) que puedan entrar a la carpeta de la app. La copia local es un espejo para verlas sin conexión.
+
+* Escritura atómica con control de revisión: si dos personas editan a la vez se detecta el conflicto (en las notas se ofrece reemplazar, cargar la del servidor o guardar como nota nueva).
+* Los archivos se crean con permisos abiertos para que otro usuario pueda editarlos; no pongas secretos en las notas.
+* La carpeta de destino de los backups es del dispositivo y no se sube. `.arkpm` nunca se borra con un deploy ni entra en los backups.
+* Si el usuario no puede escribir en la carpeta de la app, la pestaña lo avisa y se guarda solo en este dispositivo. Las notas y configuraciones anteriores se suben solas la primera vez.
+* Los demás usuarios necesitan acceso (lectura y escritura) a la carpeta de la app y a su carpeta `.arkpm`.
+
+## Terminal y Notas (dentro de cada app)
+
+* **Terminal**: consola para escribir comandos que se ejecutan en la carpeta de la app (como el usuario SSH del perfil, con el PATH y nvm cargados: `npm`, `node`, `pm2`, `git`…). El `cd` se mantiene entre comandos, hay historial (↑/↓, se guarda por app), atajos de comandos frecuentes, **Detener** / Ctrl+C para cortar un comando largo y Ctrl+L para limpiar. Los comandos delicados (`rm -rf`, `shutdown`, `dd`…) piden confirmación. No es una shell interactiva: programas que esperan teclado (`nano`, `top`, `vim`) no funcionan (usa p. ej. `top -bn1`); la entrada estándar va vacía para que nada se cuelgue.
+* **Notas**: varias notas por app, con búsqueda, guardado automático y copia. Se guardan por **servidor (host:puerto) + servicio de PM2**, no por usuario SSH ni por perfil: las ven y editan todos los usuarios/perfiles que abran esa app en ese servidor, y cada nota muestra quién la editó por última vez. Se guardan en el servidor (ver «Datos compartidos en el servidor»).
+* Orden de pestañas: Estado · Archivos · Deploy · Backup · Terminal · Notas · Logs.
+
 ## Configuración que se conserva
 
 La configuración de **Deploy** (modo, archivos que se conservan, comandos posteriores…) y de **Backup** (qué incluir/excluir, carpeta de destino…) se guarda **por servidor (host:puerto) + servicio de PM2**, no por usuario SSH ni por perfil. Se mantiene si cambias el usuario, editas el servidor, quitas la app de la lista y la vuelves a agregar, o creas otro perfil para el mismo servidor (la hereda).
@@ -40,6 +68,8 @@ La configuración de **Deploy** (modo, archivos que se conservan, comandos poste
 ## Inicio y ventana (escritorio)
 
 En ⚙ → *Inicio y ventana*: **Iniciar con Windows** (solo versión instalada/portable), **Iniciar en segundo plano** (al abrir no se muestra la ventana; queda en la bandeja y una notificación lo avisa) **Al minimizar, pasar a segundo plano** (oculta la ventana y avisa con una notificación) y **Pedir confirmación al cerrar**. Las opciones se guardan en `data/desktop.json`.
+
+**Cierre limpio**: al salir de verdad (Salir de Arkpm, `app.quit()`, Salir de la bandeja o señal de terminación) se detienen el vigilante y sus sesiones SSH, se cierran las sesiones de la interfaz, se retira el icono de la bandeja y, si algo impidiera terminar, se fuerza la salida a los 3 s. `scripts/test-cierre-procesos.js` comprueba en Linux que no queda ningún proceso de la app ni sesiones SSH abiertas en el servidor.
 
 **Confirmación al cerrar**: al cerrar la ventana pregunta «¿Cerrar Arkpm?» (Cerrar / Cancelar). Con el segundo plano activo ofrece *Pasar a segundo plano / Salir de Arkpm / Cancelar*. Incluye «No volver a preguntar» y se reactiva desde los ajustes. En Android, el botón Atrás en la pantalla principal pregunta «¿Salir de Arkpm?» (también desactivable en ⚙ → Al salir).
 
@@ -94,6 +124,11 @@ ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave npm run test:ss
 ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave ARKPM_TEST_APP=miapp node scripts/test-remote-scripts.js   # backup, deploy, restaurar, PM2
 ARKPM_TEST_PORT=22 ARKPM_TEST_USER=usuario ARKPM_TEST_PASS=clave ARKPM_TEST_APP=miapp node scripts/test-monitor.js   # vigilante: avisos de inicio/detención/reinicio, silenciado y pérdida de conexión
 xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-electron.js            # app completa con capturas (Linux)
+ARKPM_TEST_USER2=otro ARKPM_TEST_PASS2=Otro1234 node scripts/test-remote-scripts.js  # (con un segundo usuario SSH comprueba los datos compartidos entre usuarios)
+USER_A=… PASS_A=… USER_B=… PASS_B=… USER_C=… PASS_C=… node scripts/test-nginx.js   # nginx real: sudo con/sin contraseña y sin sudo
+xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-nginx.js            # pantalla de nginx completa
+ARKPM_PHASE=1|2 xvfb-run … scripts/e2e-compartido.js   # datos compartidos: fase 1, borrar data/, fase 2 (otro dispositivo)
+xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-terminal-notas.js       # pestañas Terminal y Notas (escritorio y teléfono)
 xvfb-run -a node_modules/.bin/electron --no-sandbox scripts/e2e-cambios.js              # iconos, pestañas, configuración persistente y opciones de escritorio
 ```
 > Esos tests escriben en la carpeta de la app indicada: úsalos con una app de prueba.

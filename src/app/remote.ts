@@ -56,10 +56,14 @@ export const rsyncExcludeArgs = (rules: readonly string[]): string => cleanRules
 // ------------------------------------------------------------------ backup
 export interface TarSpec { dir: string; mode: 'all-except' | 'only'; includes: string[]; excludes: string[]; }
 
+/** Carpeta de datos compartidos de la app en el servidor (notas y configuración). Nunca se borra con un deploy ni entra en los backups. */
+export const SHARED_DIRNAME = '.arkpm';
+export const sharedDir = (appDir: string): string => `${appDir.replace(/\/+$/, '')}/${SHARED_DIRNAME}`;
+
 function tarCore(s: TarSpec): { args: string; paths: string } {
   const inc = s.mode === 'only' ? cleanRules(s.includes).filter((r) => r.startsWith('/')).map((r) => './' + r.slice(1)) : ['.'];
   if (!inc.length) throw new Error('No hay nada seleccionado para incluir en el backup');
-  return { args: tarExcludeArgs(s.excludes), paths: inc.map(sq).join(' ') };
+  return { args: tarExcludeArgs([...s.excludes, '/' + SHARED_DIRNAME]), paths: inc.map(sq).join(' ') };
 }
 
 /** Crea el .tar.gz en `out` (se escribe como .part y se renombra al terminar). */
@@ -130,7 +134,7 @@ export interface ApplySpec { src: string; dir: string; mode: 'sync' | 'merge'; p
 
 /** Copia `src` sobre la carpeta de la app. En modo sync deja la carpeta idéntica (salvo lo preservado). */
 export function applyScript(s: ApplySpec): string {
-  const ex = rsyncExcludeArgs(s.preserve);
+  const ex = rsyncExcludeArgs([...s.preserve, '/' + SHARED_DIRNAME]);
   return [
     'set -e',
     `SRC=${sq(s.src)}`,
@@ -290,4 +294,88 @@ export function parseServerInfo(out: string): ServerInfo {
     disks: disks.filter((d, i) => disks.findIndex((x) => x.dev === d.dev && x.total === d.total && x.used === d.used) === i).sort((a, b) => (a.mount === '/' ? -1 : b.mount === '/' ? 1 : b.total - a.total)),
     virt: t('VIRT') === 'none' ? '' : t('VIRT'), vendor: t('VENDOR'), product: t('PRODUCT'), ips: t('IPS').split(/\s+/).filter(Boolean),
   };
+}
+
+// ------------------------------------------------------------------ terminal de la app
+export const TERM_MARK = '__ARKPM_END__';
+
+/**
+ * Ejecuta UN comando del usuario en la carpeta indicada. El comando va en base64 y se evalúa con `eval`: un error de sintaxis
+ * no impide que se imprima el marcador final con el código de salida y la carpeta resultante (así «cd» persiste entre comandos).
+ * La entrada estándar es /dev/null: lo que espere teclear algo termina en vez de quedarse colgado.
+ */
+export function terminalScript(cwd: string, fallbackDir: string, command: string): string {
+  const b64 = toBase64(new TextEncoder().encode(command));
+  return [
+    `cd ${sq(cwd)} 2>/dev/null || cd ${sq(fallbackDir)} 2>/dev/null || cd "$HOME"`,
+    `eval "$(printf %s ${b64} | base64 -d)" </dev/null`,
+    '__rc=$?',
+    `printf '\\n${TERM_MARK}%s__%s__\\n' "$__rc" "$PWD"`,
+  ].join('\n');
+}
+
+/** Si la línea es el marcador final devuelve el código de salida y la carpeta; si no, null. */
+export function parseTermMarker(line: string): { code: number; cwd: string } | null {
+  const m = line.trim().match(new RegExp('^' + TERM_MARK + '(\\d+)__(.*)__$'));
+  return m ? { code: Number(m[1]), cwd: m[2] } : null;
+}
+
+/** Comandos que merecen una confirmación antes de ejecutarse. */
+export const isRiskyCommand = (c: string): boolean =>
+  /(^|[;&|(]\s*|sudo\s+)(rm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*[rf]|mkfs|dd\s+if=|shutdown|reboot|halt|poweroff|truncate\s|chmod\s+-R\s+[0-7]+\s+\/|chown\s+-R\s+\S+\s+\/)|:\(\)\s*\{|>\s*\/dev\/sd/.test(c);
+
+// ------------------------------------------------------------------ datos compartidos en el servidor (notas + configuración)
+/**
+ * Todo vive en `<carpeta de la app>/.arkpm/`: `notes/<id>.json` (una nota por archivo, JSON de una línea) y `config.json`.
+ * Así lo ven todos los usuarios SSH y todas las conexiones (cualquier IP) que puedan entrar a la carpeta de la app.
+ * Los archivos se crean con permisos abiertos (umask 000) para que otro usuario pueda editarlos.
+ */
+export type SharedState = 'rw' | 'ro' | 'new' | 'none';
+
+export function sharedReadScript(dir: string): string {
+  const d = sq(dir);
+  return [
+    `D=${d}; P="$(dirname "$D")"`,
+    'if [ -d "$D" ]; then if [ -w "$D" ]; then echo "STATE rw"; else echo "STATE ro"; fi',
+    'elif [ -w "$P" ]; then echo "STATE new"; else echo "STATE none"; fi',
+    'for f in "$D"/notes/*.json; do [ -f "$f" ] && { printf "NOTE "; cat "$f"; echo; }; done',
+    '[ -f "$D/config.json" ] && { printf "CFG "; cat "$D/config.json"; echo; }',
+    'exit 0',
+  ].join('\n');
+}
+
+export interface SharedRead { state: SharedState; notes: any[]; config: any | null; }
+
+export function parseSharedRead(out: string): SharedRead {
+  const r: SharedRead = { state: 'none', notes: [], config: null };
+  for (const raw of out.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith('STATE ')) r.state = line.slice(6).trim() as SharedState;
+    else if (line.startsWith('NOTE ')) { try { const n = JSON.parse(line.slice(5)); if (n && typeof n.id === 'string') r.notes.push(n); } catch { /* archivo editado a mano: se ignora */ } }
+    else if (line.startsWith('CFG ')) { try { r.config = JSON.parse(line.slice(4)); } catch { /* ignora */ } }
+  }
+  return r;
+}
+
+export const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Escribe `rel` (dentro de .arkpm) con el JSON que llega por la entrada estándar. Escritura atómica (archivo temporal + mv).
+ * Si se pasa `expected`, solo escribe si el campo `field` del archivo actual vale eso; si no, termina con «CONFLICT» (código 3):
+ * así dos personas que editen a la vez no se pisan sin enterarse.
+ */
+export function sharedWriteScript(dir: string, rel: string, field: 'updatedAt' | 'rev', expected: number | null): string {
+  if (!/^(config\.json|notes\/[A-Za-z0-9_-]{1,64}\.json)$/.test(rel)) throw new Error('Ruta no permitida');
+  return [
+    'set -e', 'umask 000',
+    `D=${sq(dir)}; F="$D/${rel}"`,
+    'mkdir -p "$(dirname "$F")"',
+    ...(expected === null ? [] : [`if [ -f "$F" ]; then cur=$(grep -o '"${field}":[0-9]*' "$F" | head -1 | cut -d: -f2); [ "$cur" = "${expected}" ] || { echo CONFLICT; exit 3; }; fi`]),
+    'T=$(mktemp "$D/.tmp.XXXXXX")', 'cat > "$T"', 'chmod 666 "$T"', 'mv -f "$T" "$F"', 'echo OK',
+  ].join('\n');
+}
+
+export function sharedDeleteScript(dir: string, id: string): string {
+  if (!SAFE_ID.test(id)) throw new Error('Id no válido');
+  return `rm -f -- ${sq(dir + '/notes/' + id + '.json')}; echo OK`;
 }

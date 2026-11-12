@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
-import { AppConfig, BackupRecord, DEFAULT_CONFIG, DeployRecord, ServerProfile, TrackedApp } from './models';
+import { AppConfig, AppNote, BackupRecord, DEFAULT_CONFIG, DeployRecord, ServerProfile, TrackedApp } from './models';
 import { platformKind } from './transport';
 
 interface Row { kind: string; id: string; json: string; }
@@ -61,6 +61,7 @@ export class StoreService {
   readonly apps = computed<TrackedApp[]>(() => { const c = this.cfgs(); return this.rawApps().map((a) => ({ ...a, config: c[this.cfgKey(a.profileId, a.pm2Name)] ?? a.config })); });
   readonly backups = signal<BackupRecord[]>([]);
   readonly deploys = signal<DeployRecord[]>([]);
+  readonly notes = signal<AppNote[]>([]);
   fallbackReason: string | null = null;
   /** Sube cada vez que se guarda una huella de servidor (para volver a sincronizar el vigilante). */
   readonly pinsTick = signal(0);
@@ -85,6 +86,7 @@ export class StoreService {
     this.cfgs.set(shared);
     this.backups.set(parse<BackupRecord>('backup').sort((a, b) => b.createdAt - a.createdAt));
     this.deploys.set(parse<DeployRecord>('deploy').sort((a, b) => b.at - a.at));
+    this.notes.set(parse<AppNote>('note'));
     for (const r of rows) {
       if (r.kind === 'pin') { try { this.pins.set(r.id, JSON.parse(r.json).fp); } catch { /* ignora */ } }
       if (r.kind === 'setting') { try { this.settings.set(r.id, JSON.parse(r.json)); } catch { /* ignora */ } }
@@ -116,6 +118,9 @@ export class StoreService {
     const p = this.profiles().find((x) => x.id === profileId);
     return `${p ? this.pinKey(p.host, p.port) : 'perfil:' + profileId}|${pm2Name}`;
   }
+  /** Clave de una app (servidor host:puerto + servicio de PM2): la misma para cualquier usuario SSH o perfil. */
+  appKey(profileId: string, pm2Name: string): string { return this.cfgKey(profileId, pm2Name); }
+
   /** Configuración ya guardada para ese servidor + servicio (para reutilizarla al agregar la app de nuevo). */
   sharedConfigFor(profileId: string, pm2Name: string): AppConfig | null { return this.cfgs()[this.cfgKey(profileId, pm2Name)] ?? null; }
 
@@ -172,6 +177,22 @@ export class StoreService {
     }
     this.deploys.set(keep);
   }
+
+  // ---- notas de las apps ----
+  async saveNote(n: AppNote) {
+    await this.ready;
+    await this.be.put('note', n.id, JSON.stringify(n));
+    this.notes.update((l) => (l.some((x) => x.id === n.id) ? l.map((x) => (x.id === n.id ? n : x)) : [n, ...l]));
+  }
+  async deleteNote(id: string) {
+    await this.ready;
+    await this.be.del('note', id);
+    this.notes.update((l) => l.filter((x) => x.id !== id));
+  }
+
+  // ---- estado de sincronización con el servidor (por app) ----
+  getSyncMeta(key: string): { rev: number; dirty: boolean } { return this.getSetting<{ rev: number; dirty: boolean }>('sync:' + key, { rev: 0, dirty: false }); }
+  setSyncMeta(key: string, m: { rev: number; dirty: boolean }) { return this.setSetting('sync:' + key, m); }
 
   // ---- ajustes sueltos ----
   getSetting<T>(key: string, def: T): T { return (this.settings.has(key) ? this.settings.get(key) : def) as T; }

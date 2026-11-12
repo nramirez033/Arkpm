@@ -1,6 +1,6 @@
 {
   "name": "arkpm",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Administra apps PM2 de servidores Ubuntu por SSH (Angular + Electron + Capacitor)",
   "main": "electron/main.js",
   "scripts": {
@@ -10,6 +10,8 @@
     "electron:dev": "electron .",
     "test:ssh": "node scripts/test-ssh-layer.js",
     "test:monitor": "node scripts/test-monitor.js",
+    "test:salida": "node scripts/test-cierre-procesos.js",
+    "test:nginx": "node scripts/test-nginx.js",
     "cap:add:android": "npx cap add android",
     "cap:sync": "node scripts/version.js android && npm run build && npx cap sync",
     "cap:open:android": "npx cap open android",
@@ -25,8 +27,20 @@
     "files": ["electron/**/*", "versions.json", "dist/app/browser/**/*", "package.json"],
     "directories": { "output": "release/electron" },
     "extraResources": [{ "from": "resources/icon.png", "to": "icon.png" }],
-    "win": { "target": ["portable", "dir"], "icon": "resources/icon.png" },
-    "portable": { "artifactName": "Arkpm-${version}.exe" }
+    "win": { "target": ["portable", "dir", "nsis"], "icon": "resources/icon.png" },
+    "portable": { "artifactName": "Arkpm-${version}.exe" },
+    "nsis": {
+      "artifactName": "ArkPm-Setup-${version}.exe",
+      "include": "resources/installer.nsh",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ArkPm",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
     "@angular/animations": "^18.2.0",

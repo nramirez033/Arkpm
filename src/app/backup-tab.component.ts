@@ -9,6 +9,7 @@ import { IconComponent } from './icon.component';
 import { Job } from './job';
 import { BackupConfig } from './models';
 import { joinPath } from './remote';
+import { SharedStatusComponent } from './shared-status.component';
 import { WorkspaceService } from './workspace.service';
 
 interface TNode { path: string; name: string; isDir: boolean; depth: number; open: boolean; loading: boolean; kids: TNode[] | null; }
@@ -19,9 +20,10 @@ const isPlain = (r: string) => /^\/[^*?]*$/.test(r);
 @Component({
   selector: 'app-backup-tab',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, IconComponent, SharedStatusComponent],
   template: `
     <div class="wrap">
+      <app-shared-status what="La configuración del backup" />
       <div class="card">
         <h3>1 · Qué incluir</h3>
         <div class="seg" style="margin-bottom:10px">
@@ -172,7 +174,7 @@ export class BackupTabComponent implements OnInit {
 
   state(n: TNode): TState {
     const c = this.cfg();
-    if (this.patRules().test(n.path)) return 'locked';
+    if (this.patRules().test(n.path) || n.path === '.arkpm') return 'locked';   // .arkpm (notas y configuración compartidas) no entra en los backups
     const under = (rules: string[]) => rules.some((r) => r.startsWith('/' + n.path + '/'));
     if (c.mode === 'all-except') return this.exRules().test(n.path) ? 'off' : under(this.plainEx()) ? 'part' : 'on';
     return this.inRules().test(n.path) ? 'on' : under(c.includes) ? 'part' : 'off';

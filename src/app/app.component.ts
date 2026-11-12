@@ -7,6 +7,7 @@ import { DialogService } from './dialog.service';
 import { IconComponent } from './icon.component';
 import { LayoutService } from './layout.service';
 import { NotifyService } from './notify.service';
+import { NginxComponent } from './nginx.component';
 import { ServerInfoComponent } from './server-info.component';
 import { ServerListComponent } from './server-list.component';
 import { StoreService } from './store.service';
@@ -18,7 +19,7 @@ import { WorkspaceService } from './workspace.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [TitlebarComponent, ServerListComponent, ServerInfoComponent, AppListComponent, AppDetailComponent, DialogHostComponent, IconComponent],
+  imports: [TitlebarComponent, ServerListComponent, ServerInfoComponent, AppListComponent, AppDetailComponent, DialogHostComponent, IconComponent, NginxComponent],
   template: `
     @if (layout.isElectron) { <app-titlebar /> }
     @if (layout.platform === 'web') { <div class="banner" style="border-radius:0">Vista de navegador: la conexión SSH solo funciona en la app de escritorio (Electron) o en la de Android.</div> }
@@ -37,7 +38,10 @@ import { WorkspaceService } from './workspace.service';
         </aside>
         <main class="main">
           @if (ws.appId()) { @for (id of [ws.appId()]; track id) { <app-detail /> } }
-          @else if (ws.profile()) { <div class="infopane"><app-server-info /></div> }
+          @else if (ws.profile()) { <div class="infopane">
+            <div class="seg" style="margin-bottom:14px"><button [class.on]="ws.serverTab() !== 'nginx'" (click)="ws.serverTab.set('apps')"><app-icon name="activity" [size]="15" /> Información</button><button [class.on]="ws.serverTab() === 'nginx'" (click)="ws.serverTab.set('nginx')"><app-icon name="globe" [size]="15" /> Nginx</button></div>
+            @if (ws.serverTab() === 'nginx') { <app-nginx /> } @else { <app-server-info /> }
+          </div> }
           @else { <div class="empty big"><app-icon name="activity" [size]="48" /><h2>Administrador de PM2</h2>
             <p>Elige un servidor a la izquierda para ver su información, o agrega uno nuevo.</p></div> }
         </main>

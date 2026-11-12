@@ -8,6 +8,7 @@ import { errText, fmtBytes, fmtDate } from './format';
 import { IconComponent } from './icon.component';
 import { Job } from './job';
 import { DeployConfig } from './models';
+import { SharedStatusComponent } from './shared-status.component';
 import { WorkspaceService } from './workspace.service';
 
 type Kind = 'archive' | 'files' | 'folder';
@@ -15,9 +16,10 @@ type Kind = 'archive' | 'files' | 'folder';
 @Component({
   selector: 'app-deploy-tab',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, IconComponent, SharedStatusComponent],
   template: `
     <div class="wrap">
+      <app-shared-status what="La configuración del deploy" />
       <div class="card">
         <h3>1 · Qué subir</h3>
         <div class="seg" style="margin-bottom:12px">

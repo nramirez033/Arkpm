@@ -52,6 +52,7 @@ const PATHS: Record<string, string> = {
   cpu: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   unlink: '<path d="M9 15l6-6M10 6.5l1-1a4 4 0 0 1 5.7 5.7l-1 1M14 17.5l-1 1a4 4 0 0 1-5.7-5.7l1-1M3 3l18 18"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
   minus: '<path d="M5 12h14"/>',
   restore: '<rect x="4" y="8" width="12" height="12" rx="1.5"/><path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4H18a2 2 0 0 1 2 2v8.5a1.5 1.5 0 0 1-1.5 1.5H16"/>',
 };

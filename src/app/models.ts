@@ -126,6 +126,31 @@ export interface BackupRecord {
   note: string;
 }
 
+/**
+ * Nota de una app de PM2. Se asocia al servidor (host:puerto) + servicio, no al usuario SSH ni al perfil:
+ * la ven y la editan todos los usuarios/perfiles que usen esta app con ese servidor.
+ */
+export interface AppNote {
+  id: string;
+  key: string;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Usuario SSH que hizo la última edición. */
+  author: string;
+  /** Solo local: true cuando esta versión ya está guardada en el servidor (la copia local es un espejo para verla sin conexión). */
+  synced?: boolean;
+}
+
+/** Lo que se guarda en el servidor (`.arkpm/config.json`): la configuración de Deploy y Backup sin los datos propios de cada dispositivo. */
+export interface SharedConfig {
+  rev: number;
+  updatedAt: number;
+  updatedBy: string;
+  deploy: DeployConfig;
+  backup: Omit<BackupConfig, 'saveDir' | 'saveDirLabel'>;
+}
+
 export interface DeployRecord {
   id: string;
   appId: string;

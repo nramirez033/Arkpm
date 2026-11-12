@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   });
   await step('pestanas-y-estado', async () => {
     const labels = await safe(`[...document.querySelectorAll('.tabs button')].map(b => b.textContent.trim())`);
-    check(JSON.stringify(labels) === JSON.stringify(['Estado', 'Archivos', 'Deploy', 'Backup', 'Logs']), 'orden de pestañas: ' + labels.join(' · ') + ' (Logs al final)');
+    check(JSON.stringify(labels) === JSON.stringify(['Estado', 'Archivos', 'Deploy', 'Backup', 'Terminal', 'Notas', 'Logs']), 'orden de pestañas: ' + labels.join(' · ') + ' (Terminal y Notas antes de Logs, Logs al final)');
     const t = await safe(`[...document.querySelectorAll('app-status-tab .card:first-child button')].map(b => b.textContent.trim()).join('|')`);
     check(!/Iniciar|Detener|Reiniciar/.test(t), 'estado: iniciar/detener/reiniciar sin texto');
     const titles = await safe(`[...document.querySelectorAll('app-status-tab .card:first-child button[title]')].map(b => b.title).join(',')`);

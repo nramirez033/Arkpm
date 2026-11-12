@@ -256,5 +256,16 @@ else {
   app.on('second-instance', () => showWindow());
   app.whenReady().then(() => { loadDesktop(); applyLoginItem(); initDb(); registerIpc(); createWindow(); });
 }
-app.on('before-quit', () => { quitting = true; try { monitor && monitor.shutdown(); ssh && ssh.disconnectAll(); } catch { /* nada */ } if (db) db.close(); });
+// ---- salida: al cerrar de verdad no debe quedar NADA corriendo (ventana, bandeja, vigilante, sesiones SSH, procesos hijos) ----
+let forceExit = null;
+app.on('before-quit', () => {
+  quitting = true;
+  try { monitor && monitor.shutdown(); } catch { /* nada */ }          // detiene el temporizador y cierra sus sesiones SSH
+  try { ssh && ssh.disconnectAll(); } catch { /* nada */ }             // cierra las sesiones de la interfaz (los `tail -F` remotos mueren con su pty)
+  try { if (tray) { tray.destroy(); tray = null; } } catch { /* nada */ }   // sin esto Windows deja el icono «fantasma» en la bandeja
+  try { if (db) { db.close(); db = null; } } catch { /* nada */ }
+  // red de seguridad: si algo impidiera terminar, se fuerza la salida (mata también a los procesos hijos de Electron)
+  if (!forceExit) forceExit = setTimeout(() => app.exit(0), 3000);
+});
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { quitting = true; app.quit(); });
 app.on('window-all-closed', () => { if (!bgEnabled() || quitting) app.quit(); });
